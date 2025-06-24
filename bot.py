@@ -47,7 +47,7 @@ async def translate_text(text):
         # 双方向翻訳プロンプトを作成
         from_lang = languages[current_lang_from]
         to_lang = languages[current_lang_to]
-        prompt = f"You are a bidirectional translator between {from_lang} and {to_lang}. When you receive {from_lang} text, translate it to {to_lang}. When you receive {to_lang} text, translate it to {from_lang}. Always respond with only the translated text, no explanations. Input: {text}"
+        prompt = f"You are a bidirectional translator between {from_lang} and {to_lang}. When you receive {from_lang} text, translate it to {to_lang}. When you receive {to_lang} text, translate it to {from_lang}. Always respond with only the translated text, no explanations. You may correct the sentence if it contains errors or could lead to misunderstandings after translation. Input: {text}"
         
         # Gemini APIで翻訳実行
         model = genai.GenerativeModel('gemini-2.0-flash')
@@ -78,7 +78,7 @@ async def translate(ctx, *, text):
     
     # テキストを翻訳して結果を送信
     translation = await translate_text(text)
-    await ctx.send(f"> {translation}")
+    await ctx.send(f">>> {translation}")
 
 @bot.command(name='translation')
 async def toggle_translation(ctx):
@@ -155,7 +155,7 @@ async def on_message(message):
     # 自動翻訳モードがONかつコマンド以外のメッセージの場合
     if auto_translate_enabled and not message.content.startswith('!'):
         translation = await translate_text(message.content)
-        await message.channel.send(f"> {translation}")
+        await message.channel.send(f">>> {translation}")
     
     # コマンドの処理を実行
     await bot.process_commands(message)
