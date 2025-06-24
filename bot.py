@@ -4,7 +4,6 @@ from discord.ext import commands
 import os
 from dotenv import load_dotenv
 import google.generativeai as genai
-import re
 
 # 環境変数の読み込み
 load_dotenv()
@@ -21,22 +20,34 @@ genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
 # 自動翻訳モードの状態管理
 auto_translate_enabled = False
 
-def detect_language(text):
-    """テキストの言語を自動判定（日本語 or 英語）"""
-    japanese_pattern = re.compile(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]')
-    return 'japanese' if japanese_pattern.search(text) else 'english'
+# 言語リスト
+languages = {
+    'ja': 'Japanese',
+    'en': 'English',
+    'es': 'Spanish',
+    'fr': 'French',
+    'de': 'German',
+    'zh': 'Chinese',
+    'ko': 'Korean',
+    'it': 'Italian',
+    'ru': 'Russian',
+    'ar': 'Arabic',
+    'hi': 'Hindi',
+    'pt': 'Portuguese'
+}
+
+# 現在の言語設定（from-to形式）
+current_lang_from = 'ja'
+current_lang_to = 'en'
+
 
 async def translate_text(text):
     """Gemini APIを使用してテキストを翻訳"""
     try:
-        # 言語を自動判定
-        language = detect_language(text)
-        
-        # 判定結果に基づいてプロンプトを作成
-        if language == 'japanese':
-            prompt = f"Translate this Japanese text to English and respond with only the English translation: {text}"
-        else:
-            prompt = f"Translate this English text to Japanese and respond with only the Japanese translation: {text}"
+        # 双方向翻訳プロンプトを作成
+        from_lang = languages[current_lang_from]
+        to_lang = languages[current_lang_to]
+        prompt = f"You are a bidirectional translator between {from_lang} and {to_lang}. When you receive {from_lang} text, translate it to {to_lang}. When you receive {to_lang} text, translate it to {from_lang}. Always respond with only the translated text, no explanations. Input: {text}"
         
         # Gemini APIで翻訳実行
         model = genai.GenerativeModel('gemini-2.0-flash')
@@ -58,11 +69,6 @@ async def on_ready():
 # コマンド定義
 # ===============================
 
-@bot.command(name='hello')
-async def hello(ctx):
-    """挨拶コマンド"""
-    await ctx.send(f'Hello {ctx.author.mention}!')
-
 @bot.command(name='translate', aliases=['t'])
 async def translate(ctx, *, text):
     """手動翻訳コマンド（!translate または !t）"""
@@ -72,7 +78,7 @@ async def translate(ctx, *, text):
     
     # テキストを翻訳して結果を送信
     translation = await translate_text(text)
-    await ctx.send(f">>> {translation}")
+    await ctx.send(f"> {translation}")
 
 @bot.command(name='translation')
 async def toggle_translation(ctx):
@@ -80,7 +86,64 @@ async def toggle_translation(ctx):
     global auto_translate_enabled
     auto_translate_enabled = not auto_translate_enabled
     status = "ON" if auto_translate_enabled else "OFF"
-    await ctx.send(f"Auto-translation: {status}")
+    await ctx.send(f"> Auto-translation: **{status}**")
+
+@bot.command(name='lang')
+async def set_language(ctx, lang_pair=None):
+    """言語ペアの設定 (!lang ja-en, !lang ja-cn, !lang en-ja など)"""
+    global current_lang_from, current_lang_to
+    
+    if lang_pair is None:
+        # 現在の設定を表示
+        from_lang = languages[current_lang_from]
+        to_lang = languages[current_lang_to]
+        await ctx.send(f'''
+        > Current Language: **{from_lang} ↔ {to_lang}**
+        **Availability:**
+        `ja`: Japanese
+        `en`: English
+        `es`: Spanish
+        `fr`: French
+        `de`: German
+        `zh`: Chinese
+        `ko`: Korean
+        `it`: Italian
+        `ru`: Russian
+        `ar`: Arabic
+        `hi`: Hindi
+        `pt`: Portuguese
+        ''')
+        return
+    
+    if '-' not in lang_pair:
+        await ctx.send("> Invalid format: `!lang ja-en`")
+        return
+        
+    from_lang, to_lang = lang_pair.split('-')
+    
+    if from_lang in languages and to_lang in languages:
+        current_lang_from = from_lang
+        current_lang_to = to_lang
+        from_name = languages[from_lang]
+        to_name = languages[to_lang]
+        await ctx.send(f"> Language settings changed: {from_name} ↔ {to_name}")
+    else:
+        await ctx.send('''
+        > Invalid language code.
+        **Availability:**
+        `ja`: Japanese
+        `en`: English
+        `es`: Spanish
+        `fr`: French
+        `de`: German
+        `zh`: Chinese
+        `ko`: Korean
+        `it`: Italian
+        `ru`: Russian
+        `ar`: Arabic
+        `hi`: Hindi
+        `pt`: Portuguese
+                       ''')
 
 @bot.event
 async def on_message(message):
@@ -92,13 +155,7 @@ async def on_message(message):
     # 自動翻訳モードがONかつコマンド以外のメッセージの場合
     if auto_translate_enabled and not message.content.startswith('!'):
         translation = await translate_text(message.content)
-        await message.channel.send(f">>> {translation}")
-    # メッセージベース翻訳（translate: または 翻訳: で始まる場合）
-    elif message.content.startswith('translate:') or message.content.startswith('翻訳:'):
-        text_to_translate = message.content.split(':', 1)[1].strip()
-        if text_to_translate:
-            translation = await translate_text(text_to_translate)
-            await message.channel.send(f">>> {translation}")
+        await message.channel.send(f"> {translation}")
     
     # コマンドの処理を実行
     await bot.process_commands(message)
